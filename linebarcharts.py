@@ -5,7 +5,13 @@ from google.oauth2 import service_account
 from google.cloud import bigquery
 import numpy as np
 from statsmodels.nonparametric.smoothers_lowess import lowess
+from scipy.interpolate import interp1d
 
+def loess_smooth(window):
+    x = np.array(range(len(window)))
+    y = window.values
+    smoothed = lowess(y, x, frac=0.05)[:, 1]
+    return smoothed[-1]
 
 # Create API client.
 credentials = service_account.Credentials.from_service_account_info(
@@ -54,22 +60,36 @@ y_axis = alt.Y('latency:Q', scale=alt.Scale(type=selected_y_axis_scale), title=f
 unique_providers = df['provider_api_name'].unique()
 smoothed_data = []
 
+# # simple smoothing
+# for provider in unique_providers:
+#     provider_data = non_zero_df[non_zero_df['provider_api_name'] == provider]
+#     x = np.array(range(len(provider_data)))
+#     y = provider_data['latency'].values
+
+#     smoothed_latencies = lowess(y, x, frac=0.05)[:, 1]
+
+#     for i, timestamp in enumerate(provider_data.index):
+#         smoothed_data.append({
+#             'timestamp': timestamp,
+#             'latency': smoothed_latencies[i],
+#             'provider_api_name': provider
+#         })
+# # Convert the smoothed data into a DataFrame
+# smoothed_df = pd.DataFrame(smoothed_data)
+
+# smooth by resampling based on timestamp
 for provider in unique_providers:
-    provider_data = non_zero_df[non_zero_df['provider_api_name'] == provider]
-    x = np.array(range(len(provider_data)))
-    y = provider_data['latency'].values
+    provider_data = df[df['provider_api_name'] == provider]
+    provider_data = provider_data.resample('1T').mean().interpolate()
+    
+    provider_data['smoothed_latency'] = provider_data['latency'].rolling('1D', min_periods=1).apply(loess_smooth, raw=False)
+    
+    provider_smoothed_df = provider_data.reset_index()
+    provider_smoothed_df['provider_api_name'] = provider
+    
+    smoothed_data.append(provider_smoothed_df)
 
-    smoothed_latencies = lowess(y, x, frac=0.05)[:, 1]
-
-    for i, timestamp in enumerate(provider_data.index):
-        smoothed_data.append({
-            'timestamp': timestamp,
-            'latency': smoothed_latencies[i],
-            'provider_api_name': provider
-        })
-
-# Convert the smoothed data into a DataFrame
-smoothed_df = pd.DataFrame(smoothed_data)
+smoothed_df = pd.concat(smoothed_data)
 smoothed_df.set_index('timestamp', inplace=True)
 
 
@@ -116,7 +136,6 @@ for provider in unique_providers:
                 tooltip=['timestamp', 'latency', 'provider_api_name'],
             )
             combined_chart += point_chart
-            
         zero_point_chart = alt.Chart(zero_df.loc[zero_df['provider_api_name'] == provider].reset_index()).mark_point(
             shape='cross', color='red', size=50
         ).encode(
@@ -124,6 +143,8 @@ for provider in unique_providers:
             y=y_axis,
             tooltip=['timestamp', 'latency', 'provider_api_name'],
         )
+
+        combined_chart += zero_point_chart
 
 # Make the combined chart interactive
 combined_chart = combined_chart.interactive()
