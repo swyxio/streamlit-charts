@@ -19,13 +19,18 @@ credentials = service_account.Credentials.from_service_account_info(
 )
 client = bigquery.Client(credentials=credentials)
 
+limit_options = [100, 500, 1000, 10000]
+selected_limit = st.selectbox("Select the number of data points to display", options=limit_options)
+
+
+
 # Perform query.
 # Uses st.cache_data to only rerun when the query changes or after 10 min.
 @st.cache_data(ttl=600)
-def run_query(query):
+def run_query(query, limit):
+    query = query.format(limit)
     query_job = client.query(query)
     rows_raw = query_job.result()
-    # Convert to list of dicts. Required for st.cache_data to hash the return value.
     rows = [dict(row) for row in rows_raw]
     return rows
 
@@ -37,8 +42,8 @@ FROM
 ORDER BY
   timestamp DESC
 LIMIT
-  10000
-""")
+  {}
+""", selected_limit)
 
 
 # Print results.
@@ -80,7 +85,7 @@ smoothed_data = []
 # smooth by resampling based on timestamp
 for provider in unique_providers:
     provider_data = df[df['provider_api_name'] == provider]
-    provider_data = provider_data.resample('1T').mean().interpolate()
+    # provider_data = provider_data.resample('1T').mean().interpolate() #
     
     provider_data['smoothed_latency'] = provider_data['latency'].rolling('1D', min_periods=1).apply(loess_smooth, raw=False)
     
