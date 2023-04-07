@@ -40,6 +40,9 @@ st.write("Latency graphs of the API providers:")
 df = pd.DataFrame(rows)
 df['timestamp'] = pd.to_datetime(df['timestamp'])
 df.set_index('timestamp', inplace=True)
+non_zero_df = df[df['latency'] != 0]
+zero_df = df[df['latency'] == 0]
+
 import altair as alt
 
 
@@ -52,7 +55,7 @@ unique_providers = df['provider_api_name'].unique()
 smoothed_data = []
 
 for provider in unique_providers:
-    provider_data = df[df['provider_api_name'] == provider]
+    provider_data = non_zero_df[non_zero_df['provider_api_name'] == provider]
     x = np.array(range(len(provider_data)))
     y = provider_data['latency'].values
 
@@ -106,13 +109,20 @@ for provider in unique_providers:
 
         # Add the point chart if the corresponding checkbox is checked
         if show_point_chart:
-            point_chart = alt.Chart(df.loc[df['provider_api_name'] == provider].reset_index()).mark_point().encode(
+            point_chart = alt.Chart(non_zero_df.loc[non_zero_df['provider_api_name'] == provider].reset_index()).mark_point().encode(
                 x='timestamp:T',
                 y=y_axis,
                 color='provider_api_name:N',
                 tooltip=['timestamp', 'latency', 'provider_api_name'],
             )
             combined_chart += point_chart
+        zero_point_chart = alt.Chart(zero_df.loc[zero_df['provider_api_name'] == provider].reset_index()).mark_point(
+            shape='cross', color='red', size=50
+        ).encode(
+            x='timestamp:T',
+            y=y_axis,
+            tooltip=['timestamp', 'latency', 'provider_api_name'],
+        )
 
 # Make the combined chart interactive
 combined_chart = combined_chart.interactive()
