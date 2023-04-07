@@ -109,13 +109,14 @@ for provider in unique_providers:
 
         # Add the point chart if the corresponding checkbox is checked
         if show_point_chart:
-            point_chart = alt.Chart(non_zero_df.loc[non_zero_df['provider_api_name'] == provider].reset_index()).mark_point().encode(
+            point_chart = alt.Chart(df.loc[df['provider_api_name'] == provider].reset_index()).mark_point().encode(
                 x='timestamp:T',
                 y=y_axis,
                 color='provider_api_name:N',
                 tooltip=['timestamp', 'latency', 'provider_api_name'],
             )
             combined_chart += point_chart
+            
         zero_point_chart = alt.Chart(zero_df.loc[zero_df['provider_api_name'] == provider].reset_index()).mark_point(
             shape='cross', color='red', size=50
         ).encode(
